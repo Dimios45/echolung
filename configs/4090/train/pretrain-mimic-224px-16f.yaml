@@ -1,0 +1,111 @@
+# =============================================================================
+# EchoJEPA ViT-L Pretraining on MIMIC-IV-Echo -- RTX 4090 (24GB) Single GPU
+# =============================================================================
+# Usage:
+#   python -m app.main --fname configs/4090/train/pretrain-mimic-224px-16f.yaml --devices cuda:0
+#
+# Before running:
+#   1. Download MIMIC-IV-Echo from PhysioNet and resize videos to 224px
+#   2. Create CSV listing all videos: <path_to_video.mp4> 0
+#   3. Update data.datasets path below
+#   4. Download ViT-L checkpoint: wget -O checkpoints/vitl.pt https://dl.fbaipublicfiles.com/vjepa2/vitl.pt
+# =============================================================================
+
+app: vjepa
+nodes: 1
+tasks_per_node: 1           # <--- Single GPU
+cpus_per_task: 8
+mem_per_gpu: 22G             # <--- RTX 4090 = 24GB, leave headroom
+
+folder: experiments/pretrain/mimic_vitl_224px_16f
+
+data:
+  dataset_type: VideoDataset
+  datasets:
+  - data/csv/mimic_pretrain.csv          # <--- UPDATE: path to your MIMIC video listing
+  datasets_weights:
+  - 1.0
+  batch_size: 16                         # <--- Reduced from 128 (fits in 24GB with act. ckpt + bf16)
+  crop_size: 224
+  patch_size: 16
+  dataset_fpcs:
+  - 16
+  fps: 8                                 # Lower FPS = greater temporal coverage per clip
+  tubelet_size: 2
+  num_workers: 8
+  persistent_workers: true
+  pin_mem: true
+
+data_aug:
+  auto_augment: false
+  motion_shift: false
+  random_resize_aspect_ratio:            # Narrowed for echocardiography (preserve chamber geometry)
+  - 0.9
+  - 1.1
+  random_resize_scale:                   # Narrowed to avoid cropping out cardiac structures
+  - 0.5
+  - 1.0
+  reprob: 0.0
+
+loss:
+  loss_exp: 1.0
+
+mask:
+- aspect_ratio: [0.75, 1.5]
+  full_complement: false
+  max_keep: null
+  max_temporal_keep: 1.0
+  num_blocks: 8
+  spatial_scale: [0.15, 0.15]
+  temporal_scale: [1.0, 1.0]
+- aspect_ratio: [0.75, 1.5]
+  full_complement: false
+  max_keep: null
+  max_temporal_keep: 1.0
+  num_blocks: 2
+  spatial_scale: [0.7, 0.7]
+  temporal_scale: [1.0, 1.0]
+
+meta:
+  dtype: bfloat16                        # RTX 4090 supports bf16 natively
+  eval_freq: 100
+  load_checkpoint: false
+  read_checkpoint: null
+  save_every_freq: 5                     # Save every 5 epochs (more frequent for long runs)
+  seed: 234
+  use_sdpa: true
+
+model:
+  model_name: vit_large
+  pred_depth: 12
+  pred_embed_dim: 384
+  pred_num_heads: 12
+  uniform_power: true
+  use_activation_checkpointing: true     # CRITICAL: saves ~40% VRAM at cost of ~20% speed
+  use_mask_tokens: true
+  num_mask_tokens: 10
+  use_rope: true
+  zero_init_mask_tokens: true
+
+optimization:
+  is_anneal: false
+  force_load_pretrain: true              # Initialize from V-JEPA2 ViT-L pretrained weights
+  anneal_ckpt: checkpoints/vitl.pt       # <--- Path to downloaded ViT-L checkpoint
+
+  ema: [0.99925, 0.99925]
+  weight_decay: 0.04
+  final_weight_decay: 0.04
+
+  ipe: 300
+  ipe_scale: 1.25
+
+  # LR scaling: base recipe uses 5.25e-4 at global_batch=3072
+  # Strict linear: 5.25e-4 * (16/3072) = 2.73e-6 (too low for single GPU)
+  # Using sqrt scaling for small-batch stability: ~3.0e-5
+  # Tune this if loss plateaus early (try 1e-5) or diverges (try 1e-5)
+  start_lr: 3.0e-6
+  lr: 3.0e-5
+  final_lr: 3.0e-5
+
+  warmup: 40
+  epochs: 240

@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data (large files — symlink or download separately)
+checkpoints/*.pt
+experiments/
+data/csv/
+*.avi
+*.mp4
+*.mov
+*.mpeg
+
+# Results (track prediction CSVs and summaries)
+!results/*.csv
+!results/*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+wandb/
+
+# uv
+uv.lock
+GitHubDesktop-linux-amd64-3.4.13-linux1.deb

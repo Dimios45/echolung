@@ -1,0 +1,113 @@
+# =============================================================================
+# EchoJEPA-L Probe: COVID-BLUES 4-Class Severity Classification -- RTX 4090
+# =============================================================================
+# Usage:
+#   python -m evals.main --fname configs/pocus/covid_blues_severity.yaml --devices cuda:0
+
+app: vjepa
+cpus_per_task: 8
+folder: experiments/eval/covid_blues_severity
+mem_per_gpu: 22G
+nodes: 1
+tasks_per_node: 1
+num_workers: 8
+
+eval_name: video_classification_frozen
+resume_checkpoint: true
+tag: echojepa-vitl-covid-blues-severity
+
+experiment:
+  classifier:
+    task_type: classification
+    num_heads: 16
+    num_probe_blocks: 4
+    num_targets: 4
+    loss_type: focal
+    focal_gamma: 2.0
+
+  data:
+    dataset_type: VideoDataset
+    dataset_train: data/csv/covid_blues_severity_train.csv
+    dataset_val:   data/csv/covid_blues_severity_val.csv
+    num_classes: 4
+    resolution: 224
+    frames_per_clip: 16
+    frame_step: 1
+    num_segments: 2
+    num_views_per_segment: 1
+
+  optimization:
+    batch_size: 2
+    multihead_kwargs:
+    - lr: 1.0e-4
+      start_lr: 1.0e-4
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.04
+      final_weight_decay: 0.04
+    - lr: 1.0e-4
+      start_lr: 1.0e-4
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.004
+      final_weight_decay: 0.004
+    - lr: 1.0e-4
+      start_lr: 1.0e-4
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.0004
+      final_weight_decay: 0.0004
+    - lr: 5.0e-5
+      start_lr: 5.0e-5
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.04
+      final_weight_decay: 0.04
+    - lr: 5.0e-5
+      start_lr: 5.0e-5
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.004
+      final_weight_decay: 0.004
+    - lr: 5.0e-5
+      start_lr: 5.0e-5
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.0004
+      final_weight_decay: 0.0004
+    - lr: 1.0e-5
+      start_lr: 1.0e-5
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.04
+      final_weight_decay: 0.04
+    - lr: 1.0e-5
+      start_lr: 1.0e-5
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.004
+      final_weight_decay: 0.004
+    - lr: 1.0e-5
+      start_lr: 1.0e-5
+      final_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.0004
+      final_weight_decay: 0.0004
+    num_epochs: 50
+    use_bfloat16: true
+    use_pos_embed: false
+
+model_kwargs:
+  checkpoint: experiments/pretrain/echonet_combined_vitl_224px_16f/latest.pt
+  module_name: evals.video_classification_frozen.modelcustom.vit_encoder_multiclip
+  pretrain_kwargs:
+    encoder:
+      checkpoint_key: target_encoder
+      model_name: vit_large
+      patch_size: 16
+      tubelet_size: 2
+      uniform_power: true
+      use_rope: true
+  wrapper_kwargs:
+    max_frames: 128
+    use_pos_embed: false

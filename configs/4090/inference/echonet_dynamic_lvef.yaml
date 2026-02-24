@@ -1,0 +1,81 @@
+# =============================================================================
+# EchoJEPA-L Inference: LVEF on EchoNet-Dynamic Test Set -- RTX 4090 Single GPU
+# =============================================================================
+# Usage:
+#   python -m evals.main --fname configs/4090/inference/echonet_dynamic_lvef.yaml --devices cuda:0
+#
+# Before running:
+#   1. Train the probe using configs/4090/eval/echonet_dynamic_lvef.yaml
+#   2. Update probe_checkpoint to the best probe from training
+#   3. Update dataset_val to point to the TEST split
+# =============================================================================
+
+app: vjepa
+cpus_per_task: 8
+folder: experiments/predictions/echonet_dynamic_lvef
+mem_per_gpu: 22G
+nodes: 1
+tasks_per_node: 1
+num_workers: 8
+
+eval_name: video_classification_frozen
+resume_checkpoint: true
+tag: echojepa-vitl-echonet-dynamic-lvef-inference
+
+# --- CRITICAL INFERENCE SETTINGS ---
+val_only: true
+predictions_save_path: experiments/predictions/echonet_dynamic_lvef_predictions.csv
+
+# UPDATE: point to your trained probe checkpoint
+probe_checkpoint: experiments/eval/echonet_dynamic_lvef/probe_best.pt
+
+experiment:
+  classifier:
+    task_type: regression
+    num_heads: 16
+    num_probe_blocks: 4
+    num_targets: 1
+
+  data:
+    dataset_type: VideoDataset
+    dataset_val:   data/csv/echonet_dynamic_test.csv     # <--- Point to TEST split
+    dataset_train: data/csv/echonet_dynamic_test.csv     # Required but unused in val_only mode
+
+    resolution: 112              # Keep identical to training config
+    frames_per_clip: 16
+    frame_step: 2
+    num_segments: 2
+    num_views_per_segment: 1
+
+    target_mean: 55.7776
+    target_std: 12.4064
+
+  optimization:
+    batch_size: 4                # Can increase for inference (no gradients)
+    multihead_kwargs:
+    - final_lr: 0.0
+      final_weight_decay: 0.0
+      lr: 0.0
+      start_lr: 0.0
+      warmup: 0.0
+      weight_decay: 0.0
+
+    num_epochs: 1
+    use_bfloat16: true
+    use_pos_embed: false
+
+model_kwargs:
+  checkpoint: checkpoints/vitl.pt
+  module_name: evals.video_classification_frozen.modelcustom.vit_encoder_multiclip
+  pretrain_kwargs:
+    encoder:
+      checkpoint_key: target_encoder
+      img_temporal_dim_size: null
+      model_name: vit_large
+      patch_size: 16
+      tubelet_size: 2
+      uniform_power: true
+      use_rope: true
+  wrapper_kwargs:
+    max_frames: 128
+    use_pos_embed: false

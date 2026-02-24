@@ -1,0 +1,124 @@
+{
+  "pocus_cv_pretrained": {
+    "num_folds": 5,
+    "per_fold_best_val_acc": [
+      100.0,
+      95.83333,
+      87.5,
+      66.66667,
+      95.83333
+    ],
+    "mean": 89.1667,
+    "std": 13.3723
+  },
+  "pocus_cv_randinit": {
+    "num_folds": 5,
+    "per_fold_best_val_acc": [
+      79.16667,
+      70.83333,
+      66.66667,
+      83.33333,
+      66.66667
+    ],
+    "mean": 73.3333,
+    "std": 7.5691
+  },
+  "covid_blues_cv_pretrained": {
+    "num_folds": 5,
+    "per_fold_best_val_acc": [
+      70.27027,
+      76.38889,
+      75.0,
+      80.30303,
+      70.83333
+    ],
+    "mean": 74.5591,
+    "std": 4.1476
+  },
+  "covid_blues_cv_randinit": {
+    "num_folds": 5,
+    "per_fold_best_val_acc": [
+      60.81081,
+      66.66667,
+      64.47368,
+      63.63636,
+      56.94444
+    ],
+    "mean": 62.5064,
+    "std": 3.7505
+  },
+  "test_results": {
+    "pocus_3class": {
+      "accuracy": 66.7,
+      "n_samples": 24,
+      "per_class": {
+        "COVID": {
+          "precision": 1.0,
+          "recall": 0.167,
+          "f1": 0.286,
+          "support": 6
+        },
+        "Pneumonia": {
+          "precision": 0.833,
+          "recall": 0.714,
+          "f1": 0.769,
+          "support": 7
+        },
+        "Regular": {
+          "precision": 0.588,
+          "recall": 0.909,
+          "f1": 0.714,
+          "support": 11
+        }
+      }
+    },
+    "covid_blues_binary": {
+      "accuracy": 53.9,
+      "n_samples": 76,
+      "per_class": {
+        "COVID-": {
+          "precision": 0.471,
+          "recall": 0.235,
+          "f1": 0.314,
+          "support": 34
+        },
+        "COVID+": {
+          "precision": 0.559,
+          "recall": 0.786,
+          "f1": 0.653,
+          "support": 42
+        }
+      }
+    },
+    "covid_blues_severity": {
+      "accuracy": 7.9,
+      "n_samples": 76,
+      "per_class": {
+        "Score 0": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 37
+        },
+        "Score 1": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 25
+        },
+        "Score 2": {
+          "precision": 0.059,
+          "recall": 0.2,
+          "f1": 0.091,
+          "support": 5
+        },
+        "Score 3": {
+          "precision": 0.085,
+          "recall": 0.556,
+          "f1": 0.147,
+          "support": 9
+        }
+      }
+    }
+  }
+}
