@@ -6,12 +6,12 @@ Self-supervised representations learned from cardiac echo videos transfer effect
 
 ## Key Results
 
-| Dataset | EchoJEPA (pretrained) | Random Init | Transfer Gain |
-|---------|----------------------|-------------|---------------|
-| POCUS 3-class | **89.2% +/- 13.4%** | 73.3% +/- 7.6% | **+15.9%** |
-| COVID-BLUES binary | **74.6% +/- 4.1%** | 62.5% +/- 3.8% | **+12.1%** |
+| Dataset | EchoJEPA (pretrained) | Random Init | Transfer Gain | p-value |
+|---------|----------------------|-------------|---------------|---------|
+| POCUS 3-class | **97.5% +/- 2.3%** | 73.3% +/- 7.6% | **+24.2%** | **0.0025** |
+| COVID-BLUES binary | **75.2% +/- 5.3%** | 63.3% +/- 4.2% | **+11.9%** | **0.0054** |
 
-*5-fold patient-level stratified cross-validation. Frozen ViT-L backbone + attentive probe.*
+*5-fold patient-level stratified cross-validation. Frozen ViT-L backbone + attentive probe. Paired t-test.*
 
 ![Pretrained vs Random Init](figures/cv_pretrained_vs_randinit.png)
 
@@ -74,21 +74,21 @@ Lung US classification (POCUS 3-class, COVID-BLUES binary)
 |---|-----------|-------------|
 | Fold 0 | 100.0% | 79.2% |
 | Fold 1 | 95.8% | 70.8% |
-| Fold 2 | 87.5% | 66.7% |
-| Fold 3 | 66.7% | 83.3% |
-| Fold 4 | 95.8% | 66.7% |
-| **Mean +/- Std** | **89.2% +/- 13.4%** | **73.3% +/- 7.6%** |
+| Fold 2 | 95.8% | 66.7% |
+| Fold 3 | 95.8% | 83.3% |
+| Fold 4 | 100.0% | 66.7% |
+| **Mean +/- Std** | **97.5% +/- 2.3%** | **73.3% +/- 7.6%** |
 
 ### COVID-BLUES Binary (COVID+ / COVID-)
 
 | | Pretrained | Random Init |
 |---|-----------|-------------|
 | Fold 0 | 70.3% | 60.8% |
-| Fold 1 | 76.4% | 66.7% |
+| Fold 1 | 76.4% | 69.4% |
 | Fold 2 | 75.0% | 64.5% |
-| Fold 3 | 80.3% | 63.6% |
-| Fold 4 | 70.8% | 56.9% |
-| **Mean +/- Std** | **74.6% +/- 4.1%** | **62.5% +/- 3.8%** |
+| Fold 3 | 83.3% | 63.6% |
+| Fold 4 | 70.8% | 58.3% |
+| **Mean +/- Std** | **75.2% +/- 5.3%** | **63.3% +/- 4.2%** |
 
 ### Training Curves
 
@@ -101,6 +101,20 @@ Single train/val/test split evaluation on held-out test sets:
 ![POCUS Confusion Matrix](figures/cm_pocus_3class_norm.png)
 
 ![COVID-BLUES Confusion Matrix](figures/cm_covid_blues_binary_norm.png)
+
+### Comprehensive Metrics (5-Fold CV)
+
+| Metric | POCUS Pretrained | POCUS Randinit | COVID-BLUES Pretrained | COVID-BLUES Randinit |
+|--------|-----------------|----------------|----------------------|----------------------|
+| Accuracy | **97.5% ± 2.3%** | 73.3% ± 7.6% | **75.2% ± 5.3%** | 63.3% ± 4.2% |
+| Balanced Accuracy | **93.8% ± 3.5%** | 42.7% ± 9.0% | **61.6% ± 14.3%** | 51.0% ± 2.3% |
+| AUC-ROC | — | — | **0.683 ± 0.124** | 0.525 ± 0.071 |
+| Cohen's Kappa | **0.896 ± 0.057** | 0.117 ± 0.109 | **0.233 ± 0.287** | 0.023 ± 0.055 |
+| MCC | **0.899 ± 0.057** | 0.207 ± 0.190 | **0.238 ± 0.286** | 0.047 ± 0.116 |
+| Paired t-test p | **0.0025** | — | **0.0054** | — |
+| Cohen's d | **3.02 (large)** | — | **2.45 (large)** | — |
+
+*AUC-ROC for POCUS requires per-class probabilities from the best probe head (pending full rerun with multi-class probability logging).*
 
 ### Negative Result: Severity Classification
 
@@ -148,9 +162,19 @@ uv run python data/prepare_covid_blues.py \
     --cv_folds 5
 ```
 
-## Training
+## Reproducing Results
 
-### SSL Pretraining
+### Option A — Full pipeline in one command (~6-8h on RTX 4090)
+
+```bash
+bash scripts/run_full_eval.sh
+```
+
+This runs all 4 CV experiments, aggregates results, and computes comprehensive metrics.
+
+### Option B — Step by step
+
+#### 1. SSL Pretraining
 
 ```bash
 uv run python -m app.main \
@@ -158,7 +182,9 @@ uv run python -m app.main \
     --devices cuda:0
 ```
 
-### 5-Fold Cross-Validation
+Checkpoint saved to `experiments/pretrain/echonet_combined_vitl_224px_16f/latest.pt`.
+
+#### 2. 5-Fold Cross-Validation
 
 ```bash
 # POCUS pretrained
@@ -174,23 +200,45 @@ bash scripts/run_covid_blues_cv.sh
 bash scripts/run_covid_blues_cv_randinit.sh
 ```
 
-### Aggregate Results
+Per-fold predictions are saved to `results/cv_predictions/` at the best validation epoch.
+
+#### 3. Aggregate Accuracy
 
 ```bash
-# POCUS
+# POCUS pretrained
 uv run python scripts/aggregate_cv.py \
     --cv_dir experiments/eval/pocus_cv \
     --tag echojepa-vitl-pocus-cv \
     --output results/pocus_cv_summary.json
 
-# COVID-BLUES
+# POCUS randinit
+uv run python scripts/aggregate_cv.py \
+    --cv_dir experiments/eval/pocus_cv_randinit \
+    --tag randinit-vitl-pocus-cv \
+    --output results/pocus_cv_randinit_summary.json
+
+# COVID-BLUES pretrained
 uv run python scripts/aggregate_cv.py \
     --cv_dir experiments/eval/covid_blues_cv \
     --tag echojepa-vitl-covid-blues-cv \
     --output results/covid_blues_cv_summary.json
+
+# COVID-BLUES randinit
+uv run python scripts/aggregate_cv.py \
+    --cv_dir experiments/eval/covid_blues_cv_randinit \
+    --tag randinit-vitl-covid-blues-cv \
+    --output results/covid_blues_cv_randinit_summary.json
 ```
 
-### Generate Figures
+#### 4. Comprehensive Metrics
+
+```bash
+uv run python scripts/evaluate_metrics.py
+```
+
+Outputs `results/cv_metrics.json` with AUC-ROC/PR, balanced accuracy, Cohen's kappa, MCC, sensitivity/specificity, 95% CI, paired t-test, and Cohen's d for pretrained vs random-init.
+
+#### 5. Generate Figures
 
 ```bash
 uv run python scripts/generate_paper_figures.py
@@ -199,14 +247,25 @@ uv run python scripts/generate_paper_figures.py
 ## Project Structure
 
 ```
-configs/           # YAML configs for pretraining and evaluation
-data/              # Data preparation scripts and CSV splits
-  csv/             # Train/val/test split CSVs
-evals/             # Evaluation framework (frozen probe)
-figures/           # Generated figures (bar charts, confusion matrices, samples)
-results/           # JSON summaries and prediction CSVs
-scripts/           # CV runners, aggregation, figure generation
-src/               # Core model and training code
+configs/                  # YAML configs for pretraining and evaluation
+data/                     # Data preparation scripts and CSV splits
+  csv/                    # Train/val/test split CSVs and 5-fold splits
+evals/                    # Evaluation framework (frozen probe)
+figures/                  # Generated figures
+results/                  # JSON summaries and prediction CSVs
+  cv_predictions/         # Per-fold softmax predictions (saved at best epoch)
+  cv_metrics.json   # Full metrics: AUC, kappa, MCC, CI, significance
+  paper_results.json      # Authoritative results store
+scripts/                  # Pipeline scripts
+  run_full_eval.sh        # One-command full pipeline
+  run_pocus_cv.sh         # POCUS 5-fold CV (pretrained)
+  run_pocus_cv_randinit.sh
+  run_covid_blues_cv.sh   # COVID-BLUES 5-fold CV (pretrained)
+  run_covid_blues_cv_randinit.sh
+  aggregate_cv.py         # Aggregate per-fold accuracy → JSON
+  evaluate_metrics.py     # Comprehensive metrics suite
+  generate_paper_figures.py
+src/                      # Core model and training code
 ```
 
 ## Checkpoints

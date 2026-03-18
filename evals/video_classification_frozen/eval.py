@@ -459,9 +459,9 @@ def main(args_eval, resume_preempt=False):
         train_sampler.set_epoch(epoch)
 
         if val_only:
-            train_acc_scalar, _ = -1.0, None
+            train_acc_scalar = -1.0
         else:
-            train_acc_scalar, _ = run_one_epoch(
+            train_acc_scalar, _, _, _, _ = run_one_epoch(
                 device=device,
                 training=True,
                 encoder=encoder,
@@ -480,7 +480,7 @@ def main(args_eval, resume_preempt=False):
                 target_std=target_std,
             )
 
-        val_acc_scalar, val_heads = run_one_epoch(
+        val_acc_scalar, val_heads, val_preds, val_paths, val_labels = run_one_epoch(
             device=device,
             training=False,
             encoder=encoder,
@@ -554,6 +554,13 @@ def main(args_eval, resume_preempt=False):
         
         if rank == 0:
             csv_logger.log(epoch + 1, train_acc_scalar, val_acc_scalar)
+
+        # Save per-fold predictions at best validation epoch
+        if is_best and rank == 0 and predictions_save_path is not None and not val_only:
+            _save_predictions(
+                val_preds, val_paths, val_labels,
+                predictions_save_path, task_type, target_mean, target_std,
+            )
 
         if val_only:
             return
@@ -675,11 +682,11 @@ def run_one_epoch(
                 for t1m, t1a in zip(top1_meters, top1_accs):
                     t1m.update(t1a)
                     
-            if val_only and predictions_save_path is not None:
+            if not training:
                 for i, pred in enumerate(outputs[0]):
-                    all_predictions.append(pred.float().cpu().numpy())  # Convert to float32 first
+                    all_predictions.append(pred.float().cpu().numpy())
                     all_video_paths.append(video_paths[i])
-                    all_labels.append(labels[i].float().cpu().numpy())  # Also convert labels
+                    all_labels.append(labels[i].float().cpu().numpy())
 
         if training:
             [[lij.backward() for lij in li] for li in losses]
@@ -715,54 +722,59 @@ def run_one_epoch(
                 logger.info(msg)
 
 
-    # Save predictions (Un-normalized)
+    # Save predictions when val_only (immediate save)
     if val_only and predictions_save_path is not None and len(all_predictions) > 0:
-        import pandas as pd
-        import os
-        os.makedirs(os.path.dirname(predictions_save_path), exist_ok=True)
-            
-        if task_type == "regression":
-            # For regression, save REAL values
-            # 1. Get raw normalized predictions
-            pred_values_norm = [pred[0] if len(pred.shape) > 0 else pred for pred in all_predictions]
-            
-            # 2. Un-normalize logic for CSV
-            # --- CHANGE THIS BLOCK ---
-            t_mean = target_mean if target_mean is not None else 0.0
-            t_std = target_std if target_std is not None else 1.0
-            
-            # Convert arrays to scalars and un-normalize
-            labels_real = []
-            for l in all_labels:
-                val = l[0] if isinstance(l, (np.ndarray, list)) else l
-                labels_real.append((val * t_std) + t_mean)  # Use variables
-                
-            preds_real = []
-            for p in pred_values_norm:
-                val = p[0] if isinstance(p, (np.ndarray, list)) else p
-                preds_real.append((val * t_std) + t_mean)   # Use variables
-
-            df = pd.DataFrame({
-                'video_path': all_video_paths,
-                'label_real': labels_real,
-                'pred_real': preds_real,
-                'abs_error': [abs(a-b) for a,b in zip(labels_real, preds_real)]
-            })
-        else:  # classification
-            pred_classes = [np.argmax(pred) for pred in all_predictions]
-            pred_probs = [pred.max() for pred in all_predictions]
-            df = pd.DataFrame({
-                'video_path': all_video_paths,
-                'true_label': all_labels,
-                'predicted_class': pred_classes,
-                'prediction_confidence': pred_probs
-            })
-            
-        df.to_csv(predictions_save_path, index=False)
-        logger.info(f"Saved {len(all_predictions)} predictions to {predictions_save_path}")
+        _save_predictions(
+            all_predictions, all_video_paths, all_labels,
+            predictions_save_path, task_type, target_mean, target_std,
+        )
 
     scalar = float(_agg_metrics.min()) if task_type == "regression" else float(_agg_metrics.max())
-    return scalar, _agg_metrics
+    return scalar, _agg_metrics, all_predictions, all_video_paths, all_labels
+
+
+def _save_predictions(all_predictions, all_video_paths, all_labels,
+                      predictions_save_path, task_type, target_mean=None, target_std=None):
+    import pandas as pd
+    import os
+    os.makedirs(os.path.dirname(predictions_save_path), exist_ok=True)
+
+    if task_type == "regression":
+        t_mean = target_mean if target_mean is not None else 0.0
+        t_std = target_std if target_std is not None else 1.0
+        pred_values_norm = [pred[0] if len(pred.shape) > 0 else pred for pred in all_predictions]
+        labels_real = []
+        for l in all_labels:
+            val = l[0] if isinstance(l, (np.ndarray, list)) else l
+            labels_real.append((val * t_std) + t_mean)
+        preds_real = []
+        for p in pred_values_norm:
+            val = p[0] if isinstance(p, (np.ndarray, list)) else p
+            preds_real.append((val * t_std) + t_mean)
+        df = pd.DataFrame({
+            'video_path': all_video_paths,
+            'label_real': labels_real,
+            'pred_real': preds_real,
+            'abs_error': [abs(a - b) for a, b in zip(labels_real, preds_real)],
+        })
+    else:  # classification
+        pred_classes = [np.argmax(pred) for pred in all_predictions]
+        pred_probs = [pred.max() for pred in all_predictions]
+        num_classes = all_predictions[0].shape[0] if len(all_predictions) > 0 else 0
+        per_class_cols = {
+            f'prob_class_{c}': [float(pred[c]) for pred in all_predictions]
+            for c in range(num_classes)
+        }
+        df = pd.DataFrame({
+            'video_path': all_video_paths,
+            'true_label': all_labels,
+            'predicted_class': pred_classes,
+            'prediction_confidence': pred_probs,
+            **per_class_cols,
+        })
+
+    df.to_csv(predictions_save_path, index=False)
+    logger.info(f"Saved {len(all_predictions)} predictions to {predictions_save_path}")
 
 
 

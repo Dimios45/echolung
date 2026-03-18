@@ -132,7 +132,6 @@ def compile_paper_results():
         ("pocus_cv_randinit", "pocus_cv_randinit_summary.json"),
         ("covid_blues_cv_pretrained", "covid_blues_cv_summary.json"),
         ("covid_blues_cv_randinit", "covid_blues_cv_randinit_summary.json"),
-        ("test_results", "test_summary.json"),
     ]:
         data = load_cv_summary(os.path.join(RESULTS_DIR, path))
         if data:

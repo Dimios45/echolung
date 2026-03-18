@@ -6,6 +6,7 @@ for k in 0 1 2 3 4; do
   echo "=== Fold ${k} (random-init) ==="
   OVERRIDE_TRAIN_DATA=data/csv/covid_blues_binary_fold${k}_train.csv \
   OVERRIDE_VAL_DATA=data/csv/covid_blues_binary_fold${k}_val.csv \
+  OVERRIDE_PRED_PATH=results/cv_predictions/covid_blues/randinit/fold${k}_predictions.csv \
   uv run python -m evals.main \
     --fname configs/pocus/covid_blues_binary_cv_randinit.yaml \
     --devices cuda:0 \
